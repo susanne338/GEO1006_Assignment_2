@@ -138,6 +138,9 @@ bool Triangulation::triangulation(
     //      - estimate the fundamental matrix F;
     //      - compute the essential matrix E;
     //      - recover rotation R and t.
+    //NORMALIZE
+    //not done yet, change coordinates below to normalized
+
     //CONSTRUCTING THE W MATRIX
     int nrrows = points_0.size();
     Matrix W_matrix(nrrows, 9, 0.0) ;
