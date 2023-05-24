@@ -35,6 +35,10 @@ using namespace easy3d;
  * @return True on success, otherwise false. On success, the reconstructed 3D points must be written to 'points_3d'
  *      and the recovered relative pose must be written to R and t.
  */
+double distance(Vector2D pt, Vector2D centroid){
+    return sqrt(pow(pt[0] - centroid[0], 2) + pow(pt[1] - centroid[1], 2));
+}
+
 bool Triangulation::triangulation(
         double fx, double fy,     /// input: the focal lengths (same for both cameras)
         double cx, double cy,     /// input: the principal point (same for both cameras)
@@ -139,13 +143,76 @@ bool Triangulation::triangulation(
     //      - compute the essential matrix E;
     //      - recover rotation R and t.
     //NORMALIZE
-    //not done yet, change coordinates below to normalized
+    //compute centroid of points
+    //centroid points_0
+    double allx_0 = 0.0;
+    double ally_0 = 0.0;
+    for(auto &pt : points_0){
+        allx_0 = allx_0 + pt[0];
+        ally_0 = ally_0 + pt[1];
+    }
+    Vector2D centroid0(allx_0 / points_0.size(), ally_0 / points_0.size());
+    //centroid points_1
+    double allx_1 = 0.0;
+    double ally_1 = 0.0;
+    for(auto &pt : points_0){
+        allx_1 = allx_1 + pt[0];
+        ally_1 = ally_1 + pt[1];
+    }
+    Vector2D centroid1(allx_1 / points_1.size(), ally_1 / points_1.size());
+
+    //make translation matrices
+    Matrix33 T0 (1, 0, centroid0[0], 0, 1, centroid0[1], 0, 0, 1 );
+    Matrix33 T1 (1, 0, centroid1[0], 0, 1, centroid1[1], 0, 0, 1 );
+    //apply translation
+    std::vector<Vector2D> translated_points_0;
+    for (auto &pt : points_0) {
+        Vector2D translated_point0 = T0 *pt; //should this be dot
+        translated_points_0.push_back(translated_point0);
+    }
+    std::vector<Vector2D> translated_points_1;
+    for (auto &pt : points_1) {
+        Vector2D translated_point1 = T1 *pt; //should this be dot
+        translated_points_1.push_back(translated_point1);
+    }
+
+    //compute scaling factor 0
+    double distances_0 = 0.0;
+    for (auto &pt: translated_points_0) {
+        double dis = distance(pt, centroid0);
+        distances_0 = distances_0 + dis;
+    }
+    double mean_dis0 = distances_0 / points_0.size();
+    double scaling_fact0 = sqrt(2) / mean_dis0;
+    //compute scaling factor 1
+    double distances_1 = 0.0;
+    for (auto &pt: translated_points_1) {
+        double dis = distance(pt, centroid1);
+        distances_1 = distances_1 + dis;
+    }
+    double mean_dis1 = distances_1 / points_1.size();
+    double scaling_fact1 = sqrt(2) / mean_dis1;
+
+    //NORMALIZED POINTS
+    std::vector<Vector3D> normalized_points_0;
+    for (auto &pt: translated_points_0) {
+        Vector3D pt3d = (pt[0] * scaling_fact0, pt[1] * scaling_fact0, 1);
+        normalized_points_0.push_back(pt3d);
+    }
+
+    std::vector<Vector3D> normalized_points_1;
+    for (auto &pt: translated_points_1) {
+        Vector3D pt3d = (pt[0] * scaling_fact1, pt[1] * scaling_fact1, 1);
+        normalized_points_1.push_back(pt3d);
+    }
+
+
 
     //CONSTRUCTING THE W MATRIX
     int nrrows = points_0.size();
     Matrix W_matrix(nrrows, 9, 0.0) ;
     for (int i = 0; i < points_0.size(); ++i) {
-        W_matrix.set_row(i, {points_0[i][0] * points_1[i][0], points_0[i][1]*points_1[i][0], points_1[i][0], points_0[i][0]*points_1[i][1], points_0[i][1]*points_1[i][1], points_1[i][1], points_0[i][0], points_0[i][1], 1});
+        W_matrix.set_row(i, {normalized_points_0[i][0] * normalized_points_1[i][0], normalized_points_0[i][1]*normalized_points_1[i][0], normalized_points_1[i][0], normalized_points_0[i][0]*normalized_points_1[i][1], normalized_points_0[i][1]*normalized_points_1[i][1], normalized_points_1[i][1], normalized_points_0[i][0], normalized_points_0[i][1], 1});
     }
     std::cout << " W matrix: \n" << W_matrix <<std::endl;
 
