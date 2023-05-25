@@ -25,6 +25,8 @@
 #include "triangulation.h"
 #include "matrix_algo.h"
 #include <easy3d/optimizer/optimizer_lm.h>
+#include <iostream>
+#include <fstream>
 
 
 using namespace easy3d;
@@ -155,56 +157,63 @@ bool Triangulation::triangulation(
     //centroid points_1
     double allx_1 = 0.0;
     double ally_1 = 0.0;
-    for(auto &pt : points_0){
+    for(auto &pt : points_1){
         allx_1 = allx_1 + pt[0];
         ally_1 = ally_1 + pt[1];
     }
     Vector2D centroid1(allx_1 / points_1.size(), ally_1 / points_1.size());
-
-    //make translation matrices
-    Matrix33 T0 (1, 0, centroid0[0], 0, 1, centroid0[1], 0, 0, 1 );
-    Matrix33 T1 (1, 0, centroid1[0], 0, 1, centroid1[1], 0, 0, 1 );
-    //apply translation
-    std::vector<Vector2D> translated_points_0;
-    for (auto &pt : points_0) {
-        Vector2D translated_point0 = T0 *pt; //should this be dot
-        translated_points_0.push_back(translated_point0);
-    }
-    std::vector<Vector2D> translated_points_1;
-    for (auto &pt : points_1) {
-        Vector2D translated_point1 = T1 *pt; //should this be dot
-        translated_points_1.push_back(translated_point1);
-    }
+    std::cout<< "centroids " << centroid0 << " & " << centroid1 << std::endl;
 
     //compute scaling factor 0
     double distances_0 = 0.0;
-    for (auto &pt: translated_points_0) {
+    for (auto &pt: points_0) {
         double dis = distance(pt, centroid0);
         distances_0 = distances_0 + dis;
     }
     double mean_dis0 = distances_0 / points_0.size();
+    std::cout << " mean dist  " << mean_dis0 << std::endl;
+
     double scaling_fact0 = sqrt(2) / mean_dis0;
+    std::cout << " total distances 0 is " << distances_0 << std::endl;
+
     //compute scaling factor 1
     double distances_1 = 0.0;
-    for (auto &pt: translated_points_1) {
+    for (auto &pt: points_1) {
         double dis = distance(pt, centroid1);
         distances_1 = distances_1 + dis;
     }
     double mean_dis1 = distances_1 / points_1.size();
     double scaling_fact1 = sqrt(2) / mean_dis1;
+    std::cout << "scaling factors " << scaling_fact0 << " and " <<scaling_fact1 << std::endl;
 
-    //NORMALIZED POINTS
-    std::vector<Vector3D> normalized_points_0;
-    for (auto &pt: translated_points_0) {
-        Vector3D pt3d = (pt[0] * scaling_fact0, pt[1] * scaling_fact0, 1);
-        normalized_points_0.push_back(pt3d);
+    //make translation matrices
+    Matrix33 T0 (scaling_fact0, 0, centroid0[0], 0, scaling_fact0, centroid0[1], 0, 0, 1 );
+    Matrix33 T1 (scaling_fact1, 0, centroid1[0], 0, scaling_fact1, centroid1[1], 0, 0, 1 );
+    std::cout << "translation/scaling matrices " << T0 << " and " <<T1 << std::endl;
+
+ // apply translation/scaling: T * p. Gives the normalized points.
+    std::vector<Vector3D> norm_points_0;
+    for (auto &pt : points_0) {
+//        std::cout << " point " << pt << std::endl;
+        Vector3D homo_pt(pt[0], pt[1], 1);
+//        std::cout << "homo point " << homo_pt << std::endl;
+        Vector3D translated_point0 = mult(T0 , homo_pt);
+//        std::cout << "norm point " << translated_point0 << std::endl;
+        norm_points_0.push_back(translated_point0);
+    }
+//    std::cout << " norm points " << norm_points_0[0] << " and " << norm_points_0[95] << " and " << norm_points_0[72] << std::endl;
+
+
+
+    std::vector<Vector3D> norm_points_1;
+    for (auto &pt : points_1) {
+        Vector3D homo_pt(pt[0], pt[1], 1);
+        Vector3D translated_point1 = mult(T1, homo_pt);
+        norm_points_1.push_back(translated_point1);
     }
 
-    std::vector<Vector3D> normalized_points_1;
-    for (auto &pt: translated_points_1) {
-        Vector3D pt3d = (pt[0] * scaling_fact1, pt[1] * scaling_fact1, 1);
-        normalized_points_1.push_back(pt3d);
-    }
+//    std::cout << " 1 normalized point is " << norm_points_0[15] << " which before was " << points_0[15] << std::endl;
+//    std::cout << " another normalized point is " << norm_points_0[34] << " which before was " << points_0[34] << std::endl;
 
 
 
@@ -212,17 +221,42 @@ bool Triangulation::triangulation(
     int nrrows = points_0.size();
     Matrix W_matrix(nrrows, 9, 0.0) ;
     for (int i = 0; i < points_0.size(); ++i) {
-        W_matrix.set_row(i, {normalized_points_0[i][0] * normalized_points_1[i][0], normalized_points_0[i][1]*normalized_points_1[i][0], normalized_points_1[i][0], normalized_points_0[i][0]*normalized_points_1[i][1], normalized_points_0[i][1]*normalized_points_1[i][1], normalized_points_1[i][1], normalized_points_0[i][0], normalized_points_0[i][1], 1});
+        W_matrix.set_row(i, {norm_points_0[i][0] * norm_points_1[i][0], norm_points_0[i][1]*norm_points_1[i][0], norm_points_1[i][0], norm_points_0[i][0]*norm_points_1[i][1], norm_points_0[i][1]*norm_points_1[i][1], norm_points_1[i][1], norm_points_0[i][0], norm_points_0[i][1], 1});
     }
-    std::cout << " W matrix: \n" << W_matrix <<std::endl;
+//    std::cout << " W matrix: \n" << W_matrix <<std::endl;
 
     //SVD DECOMPOSE W
     Matrix U_matrix(points_0.size(), points_0.size(), 0.0);   // initialized with 0s
     Matrix D_matrix(points_0.size(), 9, 0.0);   // initialized with 0s
     Matrix V_matrix(9, 9, 0.0);   // initialized with 0s
     svd_decompose(W_matrix, U_matrix, D_matrix, V_matrix);
+//    std::cout << " U " << U_matrix << std::endl;
+//    std::cout << " D " << D_matrix << std::endl;
+//    std::cout << " V " << V_matrix << std::endl; //is this transpose? NO! W = U * D * V^T
 
+    //last column of V is F hat vec
+    Vector F_hat_vec = V_matrix.get_column(V_matrix.cols() - 1);
+    std::cout << "F hat vec " << F_hat_vec << std::endl;
+    //make F hat matrix
+    Matrix33 F_hat_mat(F_hat_vec[0], F_hat_vec[1], F_hat_vec[2], F_hat_vec[3], F_hat_vec[4], F_hat_vec[5], F_hat_vec[6], F_hat_vec[7], F_hat_vec[8]);
 
+    //decompose F hat
+    Matrix U(3, 3, 3);
+    Matrix D(3, 3, 3);
+    Matrix V(3, 3, 3);
+    svd_decompose(F_hat_mat, U, D, V);
+    std::cout << " U " << U << std::endl;
+    std::cout << " D " << D << std::endl;
+    std::cout << " V " << V<< std::endl;
+
+    //get F
+    std::cout << " D " << D << std::endl;
+    double d1 = D.get(0,0);
+    double d2 = D.get(1,1);
+    Matrix33 D_r2(d1, 0.0, 0.0, 0.0, d2, 0.0, 0.0, 0.0, 0.0);
+    std::cout << " D r2" << D_r2 << std::endl;
+    Matrix33 F = mult(mult(U, D_r2), transpose(V));
+    std::cout << " F " << F << std::endl;
 
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
@@ -238,4 +272,5 @@ bool Triangulation::triangulation(
     //          - input not valid (e.g., not enough points, point numbers don't match);
     //          - encountered failure in any step.
     return points_3d.size() > 0;
+
 }
