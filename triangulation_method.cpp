@@ -90,23 +90,23 @@ bool Triangulation::triangulation(
     Vector3D q = p.homogeneous();
 
     /// define a 3 by 3 matrix (and all elements initialized to 0.0)
-    Matrix33 A;
+//    Matrix33 A;
 
     /// define and initialize a 3 by 3 matrix
     Matrix33 T(1.1, 2.2, 3.3,
                0, 2.2, 3.3,
                0, 0, 1);
 
-    /// define and initialize a 3 by 4 matrix
-    Matrix34 M(1.1, 2.2, 3.3, 0,
-               0, 2.2, 3.3, 1,
-               0, 0, 1, 1);
+//    /// define and initialize a 3 by 4 matrix
+//    Matrix34 M(1.1, 2.2, 3.3, 0,
+//               0, 2.2, 3.3, 1,
+//               0, 0, 1, 1);
 
     /// set first row by a vector
-    M.set_row(0, Vector4D(1.1, 2.2, 3.3, 4.4));
+//    M.set_row(0, Vector4D(1.1, 2.2, 3.3, 4.4));
 
     /// set second column by a vector
-    M.set_column(1, Vector3D(5.5, 5.5, 5.5));
+//    M.set_column(1, Vector3D(5.5, 5.5, 5.5));
 
     /// define a 15 by 9 matrix (and all elements initialized to 0.0)
     Matrix W(15, 9, 0.0);
@@ -129,7 +129,7 @@ bool Triangulation::triangulation(
     Matrix33 I = Matrix::identity(3, 3, 1.0);
 
     /// matrix-vector product
-    Vector3D v = M * Vector4D(1, 2, 3, 4); // M is 3 by 4
+//    Vector3D v = M * Vector4D(1, 2, 3, 4); // M is 3 by 4
 
     ///For more functions of Matrix and Vector, please refer to 'matrix.h' and 'vector.h'
 
@@ -198,7 +198,7 @@ bool Triangulation::triangulation(
     Matrix33 T1 (scaling1x, 0, centroid1[0], 0, scaling1y, centroid1[1], 0, 0, 1 );
     std::cout << "translation/scaling matrices " << T0 << " and " <<T1 << std::endl;
 
- // apply translation/scaling: T * p. Gives the normalized points.
+    // apply translation/scaling: T * p. Gives the normalized points.
     std::vector<Vector3D> norm_points_0;
     for (auto &pt : points_0) {
         Vector3D homo_pt(pt[0], pt[1], 1);
@@ -260,6 +260,47 @@ bool Triangulation::triangulation(
 
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
+
+    // Compute PROJECTION MATRIX (M_matrix)
+    Matrix33 K_prime, K;
+    Matrix34 RT;
+    Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
+    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t[0]});
+    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t[1]});
+    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t[2]});
+    Matrix34 M, M_prime;
+    M_prime = mult(K_prime, RT);
+    M = mult(K, I0);
+    std::cout << "M\n" << M << std::endl;
+
+    int id = 0;
+    for (auto &pt : points_0) {
+        Vector2D pt_1 = points_1[id];
+        // construct A matrix
+        Matrix A(4, 4, 0.0);
+        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
+        A.set_row(0, (pt.x() * M.get_row(2)) - M.get_row(0));
+        A.set_row(1, (pt.y() * M.get_row(2)) - M.get_row(1));
+        A.set_row(2, (pt_1.x() * M_prime.get_row(2)) - M_prime.get_row(0));
+        A.set_row(3, (pt_1.y() * M_prime.get_row(2)) - M_prime.get_row(1));
+
+        // get P using SVD?
+        Matrix U_mat(A.rows(), A.rows(), 0.0);
+        Matrix D_mat(A.rows(), 4, 0.0);
+        Matrix V_mat(4, 4, 0.0);
+        svd_decompose(A, U_mat, D_mat, V_mat);
+        std::cout << "decomposed\n" << std::endl;
+        Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
+        std::cout << "p vec \n" << P_vec << std::endl;
+
+        // assign 3d point result to points_3d
+        points_3d[id].x() = P_vec[0];
+        points_3d[id].y() = P_vec[1];
+        points_3d[id].z() = P_vec[2];
+
+        id++;
+    }
+
 
     // TODO: Don't forget to
     //          - write your recovered 3D points into 'points_3d' (so the viewer can visualize the 3D points for you);
