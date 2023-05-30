@@ -258,6 +258,72 @@ bool Triangulation::triangulation(
     std::cout << "Denormalized F " << F << std::endl;
 
 
+    
+    
+    // TODO: Estimate relative pose of two views. This can be subdivided into
+    //      - compute the essential matrix E;
+    //      - recover rotation R and t.
+
+int calcPointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D> &points_0, const std::vector<Vector2D> &points_1);
+
+    Matrix33 K (fx, 0, cx,
+                0, fy, cy,
+                0, 0, 1);
+
+    //Define matrix E
+    Matrix E = K.transpose() * F * K;
+
+    Matrix U_E (3, 3, 0.0);
+    Matrix D_E (3, 3, 0.0);
+    Matrix V_E (3, 3, 0.0);
+
+    svd_decompose(E, U_E, D_E, V_E);
+
+    //Obtain t (last column of U)
+    Vector t1 = U_E.get_column(U_E.cols()-1);
+    Vector t2 = -1 * (U_E.get_column()-1);
+
+    //Compute rotation matrix R
+    Matrix33 W_E (0, -1, 0,
+                  1, 0, 0,
+                  0, 0, 1);
+
+    double det1 = determinant(U_E * W_E * V_E.transpose());
+    double det2 = determinant(U_E * W_E.transpose() * V_E.transpose());
+
+    Matrix R1 = det1*U_E*W_E*V_E.transpose();
+    Matrix R2 = det2*U_E*W_E.transpose()*V_E.transpose();
+
+    int count0 = calcPointsBehindOrigin(K, R1, t1, points_0, points_1);
+    int count1 = calcPointsBehindOrigin(K, R1, t2, points_0, points_1);
+    int count2 = calcPointsBehindOrigin(K, R2, t1, points_0, points_1);
+    int count3 = calcPointsBehindOrigin(K, R2, t2, points_0, points_1);
+
+    if(count0 < count1 && count0 < count2 && count0 < count3) {
+        std::cout << "case 0" << std::endl;
+        std::cout << determinant(R1) << std::endl;
+        R = R1;
+        t = t1;
+    } else if (count1 < count2 && count1 < count3) {
+        std::cout << "case 1" << std::endl;
+        std::cout << determinant(R1) << std::endl;
+        R = R1;
+        t = t2;
+    } else if(count2 < count3){
+        std::cout << "case 2" << std::endl;
+        std::cout << determinant(R2) << std::endl;
+        R = R2;
+        t = t1;
+    } else {
+        std::cout << "case 3" << std::endl;
+        std::cout << determinant(R2) << std::endl;
+        R = R2;
+        t = t2;
+    }
+
+
+    
+    
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
 
