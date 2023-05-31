@@ -41,6 +41,58 @@ double distance(Vector2D pt, Vector2D centroid){
     return sqrt(pow(pt[0] - centroid[0], 2) + pow(pt[1] - centroid[1], 2));
 }
 
+int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1)
+{
+    Matrix34 RT;
+    Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
+    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t[0]});
+    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t[1]});
+    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t[2]});
+    Matrix34 M, M_prime;
+    M_prime = mult(K, RT);
+    M = mult(K, I0);
+//    std::cout << "M\n" << M << std::endl;
+
+    int id = 0;
+    int pointcounts = 0;
+    for (auto &pt : points_0) {
+        Vector2D pt_1 = points_1[id];
+        // construct A matrix
+        Matrix A(4, 4, 0.0);
+//        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
+        A.set_row(0, (pt.x() * M.get_row(2)) - M.get_row(0));
+        A.set_row(1, (pt.y() * M.get_row(2)) - M.get_row(1));
+        A.set_row(2, (pt_1.x() * M_prime.get_row(2)) - M_prime.get_row(0));
+        A.set_row(3, (pt_1.y() * M_prime.get_row(2)) - M_prime.get_row(1));
+
+        // get P using SVD?
+        Matrix U_mat(A.rows(), A.rows(), 0.0);
+        Matrix D_mat(A.rows(), 4, 0.0);
+        Matrix V_mat(4, 4, 0.0);
+        svd_decompose(A, U_mat, D_mat, V_mat);
+//        std::cout << "decomposed\n" << std::endl;
+        Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
+        std::cout << "p vec up \n" << P_vec << std::endl;
+
+        // assign 3d point result to points_3d
+        // check the z value of the point
+        if (P_vec[2] < 0) {
+            pointcounts++;
+        }
+
+
+        id++;
+    }
+    return pointcounts;
+
+};
+
+bool sortcol(const std::vector<int>& v1, const std::vector<int>& v2)
+{
+    return v1[0] < v2[0];
+}
+
+
 bool Triangulation::triangulation(
         double fx, double fy,     /// input: the focal lengths (same for both cameras)
         double cx, double cy,     /// input: the principal point (same for both cameras)
@@ -257,10 +309,7 @@ bool Triangulation::triangulation(
     Matrix33 F = mult(mult(transpose(T1), F_q), T0);
     std::cout << "Denormalized F " << F << std::endl;
 
-
-    
-    
-    // TODO: Estimate relative pose of two views. This can be subdivided into
+// TODO: Estimate relative pose of two views. This can be subdivided into
     //      - estimate the fundamental matrix F;
     //      - compute the essential matrix E;
     //      - recover rotation R and t.
@@ -271,16 +320,16 @@ bool Triangulation::triangulation(
 
     //Define matrix E
     Matrix E = K.transpose() * F * K;
-    
+
     Matrix E_U (3, 3, 0.0);
     Matrix E_D (3, 3, 0.0);
     Matrix E_V (3, 3, 0.0);
 
     svd_decompose(E, E_U, E_D, E_V);
 
-    //Obtain t (last column of U)
+    //Obtain t (t = u3) (last column of U)
     Vector t1 = E_U.get_column(E_U.cols()-1);
-    Vector t2 = -1 * (E_U.get_column()-1);
+    Vector t2 = -1 * E_U.get_column(E_U.cols()-1);
 
     //Compute rotation matrix R
     Matrix33 E_W (0, -1, 0,
@@ -294,7 +343,7 @@ bool Triangulation::triangulation(
     Matrix R2 = determ2 * E_U * E_W.transpose() * E_V.transpose();
 
     // Calculate the number of points behind the origin for a given relative pose
-    int calculatePointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1);
+//    int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1);
 
 // Store the number of points behind the origin for each pose
     int pose0 = calculatePointsBehindOrigin(K, R1, t1, points_0, points_1);
@@ -303,72 +352,80 @@ bool Triangulation::triangulation(
     int pose3 = calculatePointsBehindOrigin(K, R2, t2, points_0, points_1);
 
 // Find the relative pose with the minimum number of points behind the origin
-    if (pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
-        std::cout << "Selected relative pose 0" << std::endl;
-        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
+//sort the poses and select the right one
+    std::vector<std::vector<int>> poses = {{pose0,0}, {pose1,1}, {pose2,2}, {pose3,3}};
+    std::vector<Matrix> rot = {R1, R1, R2, R2};
+    std::vector<Vector3D> tran = {t1, t2, t1, t2};
+    std::sort(poses.begin(), poses.end(), sortcol );
+    int correct_pose = poses[0][1]; //gives an index 0,1,2,3
+    t = tran[correct_pose];
+    R = rot[correct_pose];
 
-        // Update the variables with the selected pose
-        t = t1;
-        R = R1;
-    }
-    else if (pose1 < pose2 && pose1 < pose3) {
-        std::cout << "Selected relative pose 1" << std::endl;
-        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
-
-        // Update the variables with the selected pose
-        t = t2;
-        R = R1;
-    }
-    else if (pose2 < pose3) {
-        std::cout << "Selected relative pose 2" << std::endl;
-        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
-
-        // Update the variables with the selected pose
-        t = t1;
-        R = R2;
-    }
-    else {
-        std::cout << "Selected relative pose 3" << std::endl;
-        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
-
-        // Update the variables with the selected pose
-        t = t2;
-        R = R2;
-    }
-
-    
-    
-    ///Otherway to do this??
-//     // Store the number of points behind the origin for each pose
-// int pose0 = /* calculation for pose 0 */;
-// int pose1 = /* calculation for pose 1 */;
-// int pose2 = /* calculation for pose 2 */;
-// int pose3 = /* calculation for pose 3 */;
-
-// // Create a vector to store the pose values
-// std::vector<int> poses = { pose0, pose1, pose2, pose3 };
-
-// // Sort the poses in ascending order
-// std::sort(poses.begin(), poses.end());
-
-// // Get the correct pose with the minimum number of points behind the origin
-// int correct_pose = poses[0];
+//    if (correct_pose == 0) {
+//        R = R1;
+//        t = t1;
+//    }
+//    else if (correct_pose == 1) {
+//        R = R1;
+//        t = t2;
+//    }
+//    else if (correct_pose == 2) {
+//        R = R2;
+//        t = t1;
+//    }
+//    else if (correct_pose == 3) {
+//        R = R2;
+//        t = t2;
+//    }
 
 
-    
-    
+//    if (pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
+//        std::cout << "Selected relative pose 0" << std::endl;
+//        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
+//
+//        // Update the variables with the selected pose
+//        t = t1;
+//        R = R1;
+//    }
+//    else if (pose1 < pose2 && pose1 < pose3) {
+//        std::cout << "Selected relative pose 1" << std::endl;
+//        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
+//
+//        // Update the variables with the selected pose
+//        t = t2;
+//        R = R1;
+//    }
+//    else if (pose2 < pose3) {
+//        std::cout << "Selected relative pose 2" << std::endl;
+//        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
+//
+//        // Update the variables with the selected pose
+//        t = t1;
+//        R = R2;
+//    }
+//    else {
+//        std::cout << "Selected relative pose 3" << std::endl;
+//        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
+//
+//        // Update the variables with the selected pose
+//        t = t2;
+//        R = R2;
+//    }
+
+
+
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
 
     // Compute PROJECTION MATRIX (M_matrix)
-    Matrix33 K_prime, K;
+    Matrix33 K_prime;
     Matrix34 RT;
     Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
     RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t[0]});
     RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t[1]});
     RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t[2]});
     Matrix34 M, M_prime;
-    M_prime = mult(K_prime, RT);
+    M_prime = mult(K, RT);
     M = mult(K, I0);
     std::cout << "M\n" << M << std::endl;
 
@@ -393,9 +450,13 @@ bool Triangulation::triangulation(
         std::cout << "p vec \n" << P_vec << std::endl;
 
         // assign 3d point result to points_3d
-        points_3d[id].x() = P_vec[0];
-        points_3d[id].y() = P_vec[1];
-        points_3d[id].z() = P_vec[2];
+        Vector3D recoverpoint3d{P_vec[0]/P_vec[3], P_vec[1]/P_vec[3], P_vec[2]/P_vec[3]};
+        points_3d.push_back(recoverpoint3d);
+//        point3d.x() =
+//        points_3d[id].x() = P_vec[0];
+//        points_3d[id].y() = P_vec[1];
+//        points_3d[id].z() = P_vec[2];
+        std::cout << "id: " << id << std::endl;
 
         id++;
     }
@@ -411,6 +472,8 @@ bool Triangulation::triangulation(
     //          - function not implemented yet;
     //          - input not valid (e.g., not enough points, point numbers don't match);
     //          - encountered failure in any step.
-    return points_3d.size() > 0;
-
+//    return points_3d.size() > 0;
+    return true;
 }
+
+
