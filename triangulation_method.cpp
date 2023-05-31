@@ -294,11 +294,13 @@ int calcPointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector
     Matrix R1 = det1*U_E*W_E*V_E.transpose();
     Matrix R2 = det2*U_E*W_E.transpose()*V_E.transpose();
 
+    //count number of points in front of origin
     int count0 = calcPointsBehindOrigin(K, R1, t1, points_0, points_1);
     int count1 = calcPointsBehindOrigin(K, R1, t2, points_0, points_1);
     int count2 = calcPointsBehindOrigin(K, R2, t1, points_0, points_1);
     int count3 = calcPointsBehindOrigin(K, R2, t2, points_0, points_1);
 
+    //choose the correct "case"
     if(count0 < count1 && count0 < count2 && count0 < count3) {
         std::cout << "case 0" << std::endl;
         std::cout << determinant(R1) << std::endl;
