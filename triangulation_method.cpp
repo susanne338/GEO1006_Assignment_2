@@ -293,37 +293,47 @@ bool Triangulation::triangulation(
     Matrix R1 = determ1 * E_U * E_W * E_V.transpose();
     Matrix R2 = determ2 * E_U * E_W.transpose() * E_V.transpose();
 
-    int calcNumberBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D> &points_0, const std::vector<Vector2D> &points_1);
-    //The four candidate relative poses
-    int pose0 = calcNumberBehindOrigin(K, R1, t1, points_0, points_1);
-    int pose1 = calcNumberBehindOrigin(K, R1, t2, points_0, points_1);
-    int pose2 = calcNumberBehindOrigin(K, R2, t1, points_0, points_1);
-    int pose3 = calcNumberBehindOrigin(K, R2, t2, points_0, points_1);
+    // Calculate the number of points behind the origin for a given relative pose
+    int calculatePointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1);
 
-    if(pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
-        std::cout << "relative pose 0" << std::endl;
-        std::cout << determinant(R1) << std::endl;
+// Store the number of points behind the origin for each pose
+    int pose0 = calculatePointsBehindOrigin(K, R1, t1, points_0, points_1);
+    int pose1 = calculatePointsBehindOrigin(K, R1, t2, points_0, points_1);
+    int pose2 = calculatePointsBehindOrigin(K, R2, t1, points_0, points_1);
+    int pose3 = calculatePointsBehindOrigin(K, R2, t2, points_0, points_1);
+
+// Find the relative pose with the minimum number of points behind the origin
+    if (pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
+        std::cout << "Selected relative pose 0" << std::endl;
+        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
+
+        // Update the variables with the selected pose
         t = t1;
         R = R1;
-        
-    } else if (pose1 < pose2 && pose1 < pose3) {
-        std::cout << "relative pose 1" << std::endl;
-        std::cout << determinant(R1) << std::endl;
+    }
+    else if (pose1 < pose2 && pose1 < pose3) {
+        std::cout << "Selected relative pose 1" << std::endl;
+        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
+
+        // Update the variables with the selected pose
         t = t2;
         R = R1;
-        
-    } else if(pose2 < pose3){
-        std::cout << "relative pose 2" << std::endl;
-        std::cout << determinant(R2) << std::endl;
+    }
+    else if (pose2 < pose3) {
+        std::cout << "Selected relative pose 2" << std::endl;
+        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
+
+        // Update the variables with the selected pose
         t = t1;
         R = R2;
-        
-    } else {
-        std::cout << "relative pose 3" << std::endl;
-        std::cout << determinant(R2) << std::endl;
+    }
+    else {
+        std::cout << "Selected relative pose 3" << std::endl;
+        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
+
+        // Update the variables with the selected pose
         t = t2;
         R = R2;
-        
     }
 
 
