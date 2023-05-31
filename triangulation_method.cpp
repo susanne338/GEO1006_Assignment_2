@@ -303,23 +303,27 @@ bool Triangulation::triangulation(
     if(pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
         std::cout << "relative pose 0" << std::endl;
         std::cout << determinant(R1) << std::endl;
-        R = R1;
         t = t1;
+        R = R1;
+        
     } else if (pose1 < pose2 && pose1 < pose3) {
         std::cout << "relative pose 1" << std::endl;
         std::cout << determinant(R1) << std::endl;
-        R = R1;
         t = t2;
+        R = R1;
+        
     } else if(pose2 < pose3){
         std::cout << "relative pose 2" << std::endl;
         std::cout << determinant(R2) << std::endl;
-        R = R2;
         t = t1;
+        R = R2;
+        
     } else {
         std::cout << "relative pose 3" << std::endl;
         std::cout << determinant(R2) << std::endl;
-        R = R2;
         t = t2;
+        R = R2;
+        
     }
 
 
