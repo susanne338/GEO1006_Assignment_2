@@ -261,10 +261,9 @@ bool Triangulation::triangulation(
     
     
     // TODO: Estimate relative pose of two views. This can be subdivided into
+    //      - estimate the fundamental matrix F;
     //      - compute the essential matrix E;
     //      - recover rotation R and t.
-
-int calcPointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D> &points_0, const std::vector<Vector2D> &points_1);
 
     Matrix33 K (fx, 0, cx,
                 0, fy, cy,
@@ -272,56 +271,57 @@ int calcPointsBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector
 
     //Define matrix E
     Matrix E = K.transpose() * F * K;
+    
+    Matrix E_U (3, 3, 0.0);
+    Matrix E_D (3, 3, 0.0);
+    Matrix E_V (3, 3, 0.0);
 
-    Matrix U_E (3, 3, 0.0);
-    Matrix D_E (3, 3, 0.0);
-    Matrix V_E (3, 3, 0.0);
-
-    svd_decompose(E, U_E, D_E, V_E);
+    svd_decompose(E, E_U, E_D, E_V);
 
     //Obtain t (last column of U)
-    Vector t1 = U_E.get_column(U_E.cols()-1);
-    Vector t2 = -1 * (U_E.get_column()-1);
+    Vector t1 = E_U.get_column(E_U.cols()-1);
+    Vector t2 = -1 * E_U.get_column()-1);
 
     //Compute rotation matrix R
-    Matrix33 W_E (0, -1, 0,
+    Matrix33 E_W (0, -1, 0,
                   1, 0, 0,
                   0, 0, 1);
 
-    double det1 = determinant(U_E * W_E * V_E.transpose());
-    double det2 = determinant(U_E * W_E.transpose() * V_E.transpose());
+    double determ1 = determinant(E_U * E_W * E_V.transpose());
+    double determ2 = determinant(E_U * E_W.transpose() * E_V.transpose());
 
-    Matrix R1 = det1*U_E*W_E*V_E.transpose();
-    Matrix R2 = det2*U_E*W_E.transpose()*V_E.transpose();
+    Matrix R1 = determ1 * E_U * E_W * E_V.transpose();
+    Matrix R2 = determ2 * E_U * E_W.transpose() * E_V.transpose();
 
-    //count number of points in front of origin
-    int count0 = calcPointsBehindOrigin(K, R1, t1, points_0, points_1);
-    int count1 = calcPointsBehindOrigin(K, R1, t2, points_0, points_1);
-    int count2 = calcPointsBehindOrigin(K, R2, t1, points_0, points_1);
-    int count3 = calcPointsBehindOrigin(K, R2, t2, points_0, points_1);
+    int calcNumberBehindOrigin(Matrix33 K, Matrix33 R, Vector3D t, const std::vector<Vector2D> &points_0, const std::vector<Vector2D> &points_1);
+    //The four candidate relative poses
+    int pose0 = calcNumberBehindOrigin(K, R1, t1, points_0, points_1);
+    int pose1 = calcNumberBehindOrigin(K, R1, t2, points_0, points_1);
+    int pose2 = calcNumberBehindOrigin(K, R2, t1, points_0, points_1);
+    int pose3 = calcNumberBehindOrigin(K, R2, t2, points_0, points_1);
 
-    //choose the correct "case"
-    if(count0 < count1 && count0 < count2 && count0 < count3) {
-        std::cout << "case 0" << std::endl;
+    if(pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
+        std::cout << "relative pose 0" << std::endl;
         std::cout << determinant(R1) << std::endl;
         R = R1;
         t = t1;
-    } else if (count1 < count2 && count1 < count3) {
-        std::cout << "case 1" << std::endl;
+    } else if (pose1 < pose2 && pose1 < pose3) {
+        std::cout << "relative pose 1" << std::endl;
         std::cout << determinant(R1) << std::endl;
         R = R1;
         t = t2;
-    } else if(count2 < count3){
-        std::cout << "case 2" << std::endl;
+    } else if(pose2 < pose3){
+        std::cout << "relative pose 2" << std::endl;
         std::cout << determinant(R2) << std::endl;
         R = R2;
         t = t1;
     } else {
-        std::cout << "case 3" << std::endl;
+        std::cout << "relative pose 3" << std::endl;
         std::cout << determinant(R2) << std::endl;
         R = R2;
         t = t2;
     }
+
 
 
     
