@@ -336,6 +336,23 @@ bool Triangulation::triangulation(
         R = R2;
     }
 
+    
+    
+    ///Otherway to do this??
+//     // Store the number of points behind the origin for each pose
+// int pose0 = /* calculation for pose 0 */;
+// int pose1 = /* calculation for pose 1 */;
+// int pose2 = /* calculation for pose 2 */;
+// int pose3 = /* calculation for pose 3 */;
+
+// // Create a vector to store the pose values
+// std::vector<int> poses = { pose0, pose1, pose2, pose3 };
+
+// // Sort the poses in ascending order
+// std::sort(poses.begin(), poses.end());
+
+// // Get the correct pose with the minimum number of points behind the origin
+// int correct_pose = poses[0];
 
 
     
