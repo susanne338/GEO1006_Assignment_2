@@ -280,7 +280,7 @@ bool Triangulation::triangulation(
 
     //Obtain t (last column of U)
     Vector t1 = E_U.get_column(E_U.cols()-1);
-    Vector t2 = -1 * E_U.get_column()-1);
+    Vector t2 = -1 * (E_U.get_column()-1);
 
     //Compute rotation matrix R
     Matrix33 E_W (0, -1, 0,
