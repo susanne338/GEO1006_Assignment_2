@@ -297,7 +297,7 @@ std::cout << " norm poitn example " << norm_points_0[9];
     double d2 = D.get(1,1);
     Matrix33 D_r2(d1, 0.0, 0.0, 0.0, d2, 0.0, 0.0, 0.0, 0.0);
     std::cout << " D r2" << D_r2 << std::endl;
-    Matrix33 F_q = mult(mult(U, D_r2), V);
+    Matrix33 F_q = mult(mult(U, D_r2), transpose(V));
     std::cout << " F " << F_q << std::endl;
 
     //denormalize F
