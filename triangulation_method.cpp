@@ -38,8 +38,12 @@ using namespace easy3d;
  *      and the recovered relative pose must be written to R and t.
  */
 
-int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1)
+int calculatePointsInfrontOrigin(const Matrix33& K, Matrix33 R, Vector3D t,
+                                const std::vector<Vector2D>& points_0,
+                                const std::vector<Vector2D>& points_1,
+                                std::vector<Vector3D> &points_3d)
 {
+    // Compute PROJECTION MATRIX (M_matrix)
     Matrix34 RT;
     Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
     RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t.x()});
@@ -52,31 +56,34 @@ int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const
 
     int id = 0;
     int pointcounts = 0;
+    points_3d.clear();
     for (auto &pt : points_0) {
         Vector2D pt_1 = points_1[id];
         // construct A matrix
         Matrix A(4, 4, 0.0);
-//        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
         A.set_row(0, (pt.x() * M.get_row(2)) - M.get_row(0));
         A.set_row(1, (pt.y() * M.get_row(2)) - M.get_row(1));
         A.set_row(2, (pt_1.x() * M_prime.get_row(2)) - M_prime.get_row(0));
         A.set_row(3, (pt_1.y() * M_prime.get_row(2)) - M_prime.get_row(1));
 
-        // get P using SVD?
+        // get P using SVD
         Matrix U_mat(A.rows(), A.rows(), 0.0);
         Matrix D_mat(A.rows(), 4, 0.0);
         Matrix V_mat(4, 4, 0.0);
         svd_decompose(A, U_mat, D_mat, V_mat);
-//        std::cout << "decomposed\n" << std::endl;
         Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
 //        std::cout << "p vec up \n" << P_vec << std::endl;
 
         // assign 3d point result to points_3d
+        Vector3D recoverpoint3d1{P_vec[0]/P_vec[3], P_vec[1]/P_vec[3], P_vec[2]/P_vec[3]};
+        Vector3D recoverpoint3d2 = R * recoverpoint3d1 + t;
+//        points_3d.push_back(recoverpoint3d);
+
         // check the z value of the point
-        if (P_vec[2]/P_vec[3] < 0) {
+        if (recoverpoint3d1.z() >= 0 && recoverpoint3d2.z() >= 0) {
             pointcounts++;
         }
-
+        points_3d.push_back(recoverpoint3d1);
         id++;
     }
     std::cout << "num of points behind: " << pointcounts << std::endl;
@@ -86,7 +93,7 @@ int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const
 
 bool sortcol(const std::vector<int>& v1, const std::vector<int>& v2)
 {
-    return v1[0] < v2[0];
+    return v1[0] > v2[0];
 }
 
 
@@ -188,6 +195,9 @@ bool Triangulation::triangulation(
     // implementation starts ...
 
     // TODO: check if the input is valid (always good because you never known how others will call your function).
+    if (points_0.size() != points_1.size()) {
+        return false;
+    }
 
     // TODO: Estimate relative pose of two views. This can be subdivided into
     //      - estimate the fundamental matrix F;
@@ -257,7 +267,7 @@ bool Triangulation::triangulation(
         Vector3D translated_point1 = mult(T1, homo_pt);
         norm_points_1.push_back(translated_point1);
     }
-std::cout << " norm poitn example " << norm_points_0[9];
+    std::cout << " norm poitn example " << norm_points_0[9];
 
     //CONSTRUCTING THE W MATRIX
     int nrrows = points_0.size();
@@ -316,6 +326,7 @@ std::cout << " norm poitn example " << norm_points_0[9];
 
     //Define matrix E
     Matrix E = K.transpose() * F * K;
+    std::cout << "E\n" << E << std::endl;
 
     Matrix E_U (3, 3, 0.0);
     Matrix E_D (3, 3, 0.0);
@@ -334,18 +345,21 @@ std::cout << " norm poitn example " << norm_points_0[9];
 
     double determ1 = determinant(E_U * E_W * E_V.transpose());
     double determ2 = determinant(E_U * E_W.transpose() * E_V.transpose());
-
     Matrix R1 = determ1 * E_U * E_W * E_V.transpose();
     Matrix R2 = determ2 * E_U * E_W.transpose() * E_V.transpose();
+//    double determ1 = determinant(mult(mult(E_U, E_W), E_V.transpose()));
+//    double determ2 = determinant(mult(mult(E_U, E_W.transpose()), E_V.transpose()));
+//    Matrix R1 = mult(mult(determ1 * E_U, E_W), E_V.transpose());
+//    Matrix R2 = mult(mult(determ2 * E_U, E_W.transpose()), E_V.transpose());
 
     // Calculate the number of points behind the origin for a given relative pose
 //    int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1);
 
 // Store the number of points behind the origin for each pose
-    int pose0 = calculatePointsBehindOrigin(K, R1, t1, points_0, points_1);
-    int pose1 = calculatePointsBehindOrigin(K, R1, t2, points_0, points_1);
-    int pose2 = calculatePointsBehindOrigin(K, R2, t1, points_0, points_1);
-    int pose3 = calculatePointsBehindOrigin(K, R2, t2, points_0, points_1);
+    int pose0 = calculatePointsInfrontOrigin(K, R1, t1, points_0, points_1, points_3d);
+    int pose1 = calculatePointsInfrontOrigin(K, R1, t2, points_0, points_1, points_3d);
+    int pose2 = calculatePointsInfrontOrigin(K, R2, t1, points_0, points_1, points_3d);
+    int pose3 = calculatePointsInfrontOrigin(K, R2, t2, points_0, points_1, points_3d);
 
 // Find the relative pose with the minimum number of points behind the origin
 //sort the poses and select the right one
@@ -359,61 +373,18 @@ std::cout << " norm poitn example " << norm_points_0[9];
     std::cout << "correct pose: " << correct_pose << std::endl;
 //    t = t1;
 //    R = R1;
-    std::cout << "R1 \n" << R1 << std::endl;
-    std::cout << "R2 \n" << R2 << std::endl;
-    std::cout << "t1 \n" << t1 << std::endl;
-    std::cout << "t2 \n" << t2 << std::endl;
+    std::cout << "R \n" << R << std::endl;
+    std::cout << "t \n" << t << std::endl;
 
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
 
-    // Compute PROJECTION MATRIX (M_matrix)
-    Matrix34 RT;
-    Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
-    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t.x()});
-    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t.y()});
-    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t.z()});
-    Matrix34 M, M_prime;
-    M_prime = mult(K, RT); // same camera parameters -> so matrix K' = K
-    M = mult(K, I0);
-    std::cout << "R T\n" << RT << std::endl;
-    std::cout << "M\n" << M << std::endl;
-    std::cout << "M'\n" << M_prime << std::endl;
-
-    int id = 0;
-    for (auto &pt : points_0) {
-        Vector2D pt_1 = points_1[id];
-        // construct A matrix
-        Matrix A(4, 4, 0.0);
-//        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
-        A.set_row(0, (pt.x() * M.get_row(2)) - M.get_row(0));
-        A.set_row(1, (pt.y() * M.get_row(2)) - M.get_row(1));
-        A.set_row(2, (pt_1.x() * M_prime.get_row(2)) - M_prime.get_row(0));
-        A.set_row(3, (pt_1.y() * M_prime.get_row(2)) - M_prime.get_row(1));
-        std::cout << "A matrix: " << A << std::endl;
-
-        // get P using SVD?
-        Matrix U_mat(A.rows(), A.rows(), 0.0);
-        Matrix D_mat(A.rows(), 4, 0.0);
-        Matrix V_mat(4, 4, 0.0);
-        svd_decompose(A, U_mat, D_mat, V_mat);
-        std::cout << "decomposed\n" << std::endl;
-        Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
-        std::cout << "p vec \n" << P_vec << std::endl;
-
-        // assign 3d point result to points_3d
-        Vector3D recoverpoint3d{P_vec[0]/P_vec[3], P_vec[1]/P_vec[3], P_vec[2]/P_vec[3]};
-        points_3d.push_back(recoverpoint3d);
-        std::cout << "id: " << id << std::endl;
-//        std::cout << "z coord " << P_vec[2] << std::endl;
-
-        id++;
-    }
+    int pointsbehind = calculatePointsInfrontOrigin(K, R, t, points_0, points_1, points_3d);
 
     std::cout << "y coord try: \n" ;
     std::cout << points_3d[140][1] << std::endl;
     std::cout << points_3d[1][1] << std::endl;
-    std::cout << points_3d.size() << std::endl;
+    std::cout << pointsbehind << std::endl;
 
 
     // TODO: Don't forget to
