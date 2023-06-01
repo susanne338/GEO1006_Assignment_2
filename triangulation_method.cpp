@@ -199,74 +199,45 @@ bool Triangulation::triangulation(
     double allx_0 = 0.0;
     double ally_0 = 0.0;
     for(auto &pt : points_0){
-        allx_0 = allx_0 + pt[0];
-        ally_0 = ally_0 + pt[1];
+        allx_0 += pt.x();
+        ally_0 += pt.y();
     }
     Vector2D centroid0(allx_0 / points_0.size(), ally_0 / points_0.size());
+
     //centroid points_1
     double allx_1 = 0.0;
     double ally_1 = 0.0;
     for(auto &pt : points_1){
-        allx_1 = allx_1 + pt[0];
-        ally_1 = ally_1 + pt[1];
+        allx_1 += pt.x();
+        ally_1 += pt.y();
     }
     Vector2D centroid1(allx_1 / points_1.size(), ally_1 / points_1.size());
     std::cout<< "centroids " << centroid0 << " & " << centroid1 << std::endl;
 
-    //scaling factor 0
-    double dis0x = 0.0;
-    double dis0y = 0.0;
+    //mean distance to centroid --> scaling factor 0
     double dis_to_centr0 = 0.0;
-    double meanx0 = 0.0;
-    double meany0 = 0.0;
     for (auto &pt : points_0) {
-        double disx = abs(pt.x() - centroid0.x());
-        dis0x += disx;
-        double disy = abs(pt.y() - centroid0.y());
-        dis0y += disy;
         dis_to_centr0 += distance(pt, centroid0);
-        meanx0 += pt.x();
-        meany0 += pt.y();
     }
-
-    double mean_0x = dis0x / points_0.size();
-    double mean_0y = dis0y / points_0.size();
     double mean_dis_to_centroid0 = dis_to_centr0 / points_0.size();
     double scaling0x = sqrt(2) / mean_dis_to_centroid0;
     double scaling0y = sqrt(2) / mean_dis_to_centroid0;
-    meanx0 = meanx0 / points_0.size();
-    meany0 = meany0 / points_0.size();
 
 
-    //scaling factor 1
-    double dis1x = 0.0;
-    double dis1y = 0.0;
+    //mean distance to centroid --> scaling factor 1
     double dis_to_centr1 = 0.0;
-    double meanx1 = 0.0;
-    double meany1 = 0.0;
     for (auto &pt : points_1) {
-        double disx = abs(pt.x() - centroid1.x());
-        dis1x += disx;
-        double disy = abs(pt.y() - centroid1.y());
-        dis1y += disy;
         dis_to_centr1 += distance(pt, centroid1);
-        meanx1 += pt.x();
-        meany1 += pt.y();
     }
-    double mean_1x = dis1x / points_1.size();
-    double mean_1y = dis1y / points_1.size();
     double mean_dis_to_centroid1 = dis_to_centr1 / points_1.size();
     double scaling1x = sqrt(2) / mean_dis_to_centroid1;
     double scaling1y = sqrt(2) / mean_dis_to_centroid1;
-    meanx1 = meanx1 / points_1.size();
-    meany1 = meany1 / points_1.size();
 
 
-
-    double tx0 = (-sqrt(2) * meanx0) / mean_dis_to_centroid0;
-    double ty0 = (-sqrt(2) * meany0) / mean_dis_to_centroid0;
-    double tx1 = (-sqrt(2) * meanx1) / mean_dis_to_centroid1;
-    double ty1 = (-sqrt(2) * meany1) / mean_dis_to_centroid1;
+    double tx0 = (-sqrt(2) * centroid0.x()) / mean_dis_to_centroid0;
+    double ty0 = (-sqrt(2) * centroid0.y()) / mean_dis_to_centroid0;
+    double tx1 = (-sqrt(2) * centroid1.x()) / mean_dis_to_centroid1;
+    double ty1 = (-sqrt(2) * centroid1.y()) / mean_dis_to_centroid1;
 
     //make translation/scaling matrices
     Matrix33 T0 (scaling0x, 0, tx0, 0, scaling0y, ty0, 0, 0, 1 );
@@ -276,22 +247,23 @@ bool Triangulation::triangulation(
     // apply translation/scaling: T * p. Gives the normalized points.
     std::vector<Vector3D> norm_points_0;
     for (auto &pt : points_0) {
-        Vector3D homo_pt(pt[0], pt[1], 1);
+        Vector3D homo_pt(pt.x(), pt.y(), 1);
         Vector3D translated_point0 = mult(T0 , homo_pt);
         norm_points_0.push_back(translated_point0);
     }
     std::vector<Vector3D> norm_points_1;
     for (auto &pt : points_1) {
-        Vector3D homo_pt(pt[0], pt[1], 1);
+        Vector3D homo_pt(pt.x(), pt.y(), 1);
         Vector3D translated_point1 = mult(T1, homo_pt);
         norm_points_1.push_back(translated_point1);
     }
-
+std::cout << " norm poitn example " << norm_points_0[9];
 
     //CONSTRUCTING THE W MATRIX
     int nrrows = points_0.size();
     Matrix W_matrix(nrrows, 9, 0.0) ;
     for (int i = 0; i < points_0.size(); ++i) {
+//        W_matrix.set_row(i, {norm_points_0[i].x() * norm_points_1[i].x(), norm_points_0[i].y()*norm_points_1[i].y(), norm_points_1[i].x(), norm_points_0[i].x()*norm_points_1[i].y(), norm_points_0[i].y()*norm_points_1[i].y(), norm_points_1[i].y(), norm_points_0[i].x(), norm_points_0[i].y(), 1});
         W_matrix.set_row(i, {norm_points_0[i][0] * norm_points_1[i][0], norm_points_0[i][1]*norm_points_1[i][0], norm_points_1[i][0], norm_points_0[i][0]*norm_points_1[i][1], norm_points_0[i][1]*norm_points_1[i][1], norm_points_1[i][1], norm_points_0[i][0], norm_points_0[i][1], 1});
     }
 //    std::cout << " W matrix: \n" << W_matrix <<std::endl;
@@ -457,5 +429,3 @@ bool Triangulation::triangulation(
 //    return points_3d.size() > 0;
     return true;
 }
-
-
