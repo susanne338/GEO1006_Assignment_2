@@ -37,17 +37,14 @@ using namespace easy3d;
  * @return True on success, otherwise false. On success, the reconstructed 3D points must be written to 'points_3d'
  *      and the recovered relative pose must be written to R and t.
  */
-double distance(Vector2D pt, Vector2D centroid){
-    return sqrt(pow(pt[0] - centroid[0], 2) + pow(pt[1] - centroid[1], 2));
-}
 
 int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1)
 {
     Matrix34 RT;
     Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
-    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t[0]});
-    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t[1]});
-    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t[2]});
+    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t.x()});
+    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t.y()});
+    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t.z()});
     Matrix34 M, M_prime;
     M_prime = mult(K, RT);
     M = mult(K, I0);
@@ -72,17 +69,17 @@ int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const
         svd_decompose(A, U_mat, D_mat, V_mat);
 //        std::cout << "decomposed\n" << std::endl;
         Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
-        std::cout << "p vec up \n" << P_vec << std::endl;
+//        std::cout << "p vec up \n" << P_vec << std::endl;
 
         // assign 3d point result to points_3d
         // check the z value of the point
-        if (P_vec[2] < 0) {
+        if (P_vec[2]/P_vec[3] < 0) {
             pointcounts++;
         }
 
-
         id++;
     }
+    std::cout << "num of points behind: " << pointcounts << std::endl;
     return pointcounts;
 
 };
@@ -219,35 +216,61 @@ bool Triangulation::triangulation(
     //scaling factor 0
     double dis0x = 0.0;
     double dis0y = 0.0;
+    double dis_to_centr0 = 0.0;
+    double meanx0 = 0.0;
+    double meany0 = 0.0;
     for (auto &pt : points_0) {
         double disx = abs(pt.x() - centroid0.x());
         dis0x += disx;
         double disy = abs(pt.y() - centroid0.y());
         dis0y += disy;
+        dis_to_centr0 += distance(pt, centroid0);
+        meanx0 += pt.x();
+        meany0 += pt.y();
     }
+
     double mean_0x = dis0x / points_0.size();
     double mean_0y = dis0y / points_0.size();
-    double scaling0x = sqrt(2) / mean_0x;
-    double scaling0y = sqrt(2) / mean_0y;
+    double mean_dis_to_centroid0 = dis_to_centr0 / points_0.size();
+    double scaling0x = sqrt(2) / mean_dis_to_centroid0;
+    double scaling0y = sqrt(2) / mean_dis_to_centroid0;
+    meanx0 = meanx0 / points_0.size();
+    meany0 = meany0 / points_0.size();
+
 
     //scaling factor 1
     double dis1x = 0.0;
     double dis1y = 0.0;
+    double dis_to_centr1 = 0.0;
+    double meanx1 = 0.0;
+    double meany1 = 0.0;
     for (auto &pt : points_1) {
         double disx = abs(pt.x() - centroid1.x());
         dis1x += disx;
         double disy = abs(pt.y() - centroid1.y());
         dis1y += disy;
+        dis_to_centr1 += distance(pt, centroid1);
+        meanx1 += pt.x();
+        meany1 += pt.y();
     }
     double mean_1x = dis1x / points_1.size();
     double mean_1y = dis1y / points_1.size();
-    double scaling1x = sqrt(2) / mean_1x;
-    double scaling1y = sqrt(2) / mean_1y;
+    double mean_dis_to_centroid1 = dis_to_centr1 / points_1.size();
+    double scaling1x = sqrt(2) / mean_dis_to_centroid1;
+    double scaling1y = sqrt(2) / mean_dis_to_centroid1;
+    meanx1 = meanx1 / points_1.size();
+    meany1 = meany1 / points_1.size();
 
+
+
+    double tx0 = (-sqrt(2) * meanx0) / mean_dis_to_centroid0;
+    double ty0 = (-sqrt(2) * meany0) / mean_dis_to_centroid0;
+    double tx1 = (-sqrt(2) * meanx1) / mean_dis_to_centroid1;
+    double ty1 = (-sqrt(2) * meany1) / mean_dis_to_centroid1;
 
     //make translation/scaling matrices
-    Matrix33 T0 (scaling0x, 0, centroid0[0], 0, scaling0y, centroid0[1], 0, 0, 1 );
-    Matrix33 T1 (scaling1x, 0, centroid1[0], 0, scaling1y, centroid1[1], 0, 0, 1 );
+    Matrix33 T0 (scaling0x, 0, tx0, 0, scaling0y, ty0, 0, 0, 1 );
+    Matrix33 T1 (scaling1x, 0, tx1, 0, scaling1y, ty1, 0, 0, 1 );
     std::cout << "translation/scaling matrices " << T0 << " and " <<T1 << std::endl;
 
     // apply translation/scaling: T * p. Gives the normalized points.
@@ -283,7 +306,7 @@ bool Triangulation::triangulation(
 //    std::cout << " V " << V_matrix << std::endl; //is this transpose? YA?! noo?  W = U * D * V^T
 
     //last column of V is F hat vec
-    Vector F_hat_vec = transpose(V_matrix).get_column(transpose(V_matrix).cols() - 1);
+    Vector F_hat_vec = V_matrix.get_column(V_matrix.cols() - 1);
 //    std::cout << "F hat vec " << F_hat_vec << std::endl;
     //make F hat matrix
     Matrix33 F_hat_mat(F_hat_vec[0], F_hat_vec[1], F_hat_vec[2], F_hat_vec[3], F_hat_vec[4], F_hat_vec[5], F_hat_vec[6], F_hat_vec[7], F_hat_vec[8]);
@@ -317,6 +340,7 @@ bool Triangulation::triangulation(
     Matrix33 K (fx, 0, cx,
                 0, fy, cy,
                 0, 0, 1);
+    std::cout << "K " << K << std::endl;
 
     //Define matrix E
     Matrix E = K.transpose() * F * K;
@@ -360,85 +384,41 @@ bool Triangulation::triangulation(
     int correct_pose = poses[0][1]; //gives an index 0,1,2,3
     t = tran[correct_pose];
     R = rot[correct_pose];
-
-//    if (correct_pose == 0) {
-//        R = R1;
-//        t = t1;
-//    }
-//    else if (correct_pose == 1) {
-//        R = R1;
-//        t = t2;
-//    }
-//    else if (correct_pose == 2) {
-//        R = R2;
-//        t = t1;
-//    }
-//    else if (correct_pose == 3) {
-//        R = R2;
-//        t = t2;
-//    }
-
-
-//    if (pose0 < pose1 && pose0 < pose2 && pose0 < pose3) {
-//        std::cout << "Selected relative pose 0" << std::endl;
-//        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
-//
-//        // Update the variables with the selected pose
-//        t = t1;
-//        R = R1;
-//    }
-//    else if (pose1 < pose2 && pose1 < pose3) {
-//        std::cout << "Selected relative pose 1" << std::endl;
-//        std::cout << "Determinant of R1: " << determinant(R1) << std::endl;
-//
-//        // Update the variables with the selected pose
-//        t = t2;
-//        R = R1;
-//    }
-//    else if (pose2 < pose3) {
-//        std::cout << "Selected relative pose 2" << std::endl;
-//        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
-//
-//        // Update the variables with the selected pose
-//        t = t1;
-//        R = R2;
-//    }
-//    else {
-//        std::cout << "Selected relative pose 3" << std::endl;
-//        std::cout << "Determinant of R2: " << determinant(R2) << std::endl;
-//
-//        // Update the variables with the selected pose
-//        t = t2;
-//        R = R2;
-//    }
-
-
+    std::cout << "correct pose: " << correct_pose << std::endl;
+//    t = t1;
+//    R = R1;
+    std::cout << "R1 \n" << R1 << std::endl;
+    std::cout << "R2 \n" << R2 << std::endl;
+    std::cout << "t1 \n" << t1 << std::endl;
+    std::cout << "t2 \n" << t2 << std::endl;
 
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
 
     // Compute PROJECTION MATRIX (M_matrix)
-    Matrix33 K_prime;
     Matrix34 RT;
     Matrix34 I0 (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0);
-    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t[0]});
-    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t[1]});
-    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t[2]});
+    RT.set_row(0, {R(0,0), R(0, 1), R(0,2), t.x()});
+    RT.set_row(1, {R(1,0), R(1, 1), R(1,2), t.y()});
+    RT.set_row(2, {R(2,0), R(2, 1), R(2,2), t.z()});
     Matrix34 M, M_prime;
-    M_prime = mult(K, RT);
+    M_prime = mult(K, RT); // same camera parameters -> so matrix K' = K
     M = mult(K, I0);
+    std::cout << "R T\n" << RT << std::endl;
     std::cout << "M\n" << M << std::endl;
+    std::cout << "M'\n" << M_prime << std::endl;
 
     int id = 0;
     for (auto &pt : points_0) {
         Vector2D pt_1 = points_1[id];
         // construct A matrix
         Matrix A(4, 4, 0.0);
-        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
+//        std:: cout << "try: " << (pt.x() * M.get_row(2)) - M.get_row(0) << std::endl;
         A.set_row(0, (pt.x() * M.get_row(2)) - M.get_row(0));
         A.set_row(1, (pt.y() * M.get_row(2)) - M.get_row(1));
         A.set_row(2, (pt_1.x() * M_prime.get_row(2)) - M_prime.get_row(0));
         A.set_row(3, (pt_1.y() * M_prime.get_row(2)) - M_prime.get_row(1));
+        std::cout << "A matrix: " << A << std::endl;
 
         // get P using SVD?
         Matrix U_mat(A.rows(), A.rows(), 0.0);
@@ -452,14 +432,16 @@ bool Triangulation::triangulation(
         // assign 3d point result to points_3d
         Vector3D recoverpoint3d{P_vec[0]/P_vec[3], P_vec[1]/P_vec[3], P_vec[2]/P_vec[3]};
         points_3d.push_back(recoverpoint3d);
-//        point3d.x() =
-//        points_3d[id].x() = P_vec[0];
-//        points_3d[id].y() = P_vec[1];
-//        points_3d[id].z() = P_vec[2];
         std::cout << "id: " << id << std::endl;
+//        std::cout << "z coord " << P_vec[2] << std::endl;
 
         id++;
     }
+
+    std::cout << "y coord try: \n" ;
+    std::cout << points_3d[140][1] << std::endl;
+    std::cout << points_3d[1][1] << std::endl;
+    std::cout << points_3d.size() << std::endl;
 
 
     // TODO: Don't forget to
