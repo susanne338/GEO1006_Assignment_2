@@ -72,12 +72,10 @@ int calculatePointsInfrontOrigin(const Matrix33& K, Matrix33 R, Vector3D t,
         Matrix V_mat(4, 4, 0.0);
         svd_decompose(A, U_mat, D_mat, V_mat);
         Vector P_vec = V_mat.get_column(V_mat.cols() - 1);
-//        std::cout << "p vec up \n" << P_vec << std::endl;
 
         // assign 3d point result to points_3d
         Vector3D recoverpoint3d1{P_vec[0]/P_vec[3], P_vec[1]/P_vec[3], P_vec[2]/P_vec[3]};
         Vector3D recoverpoint3d2 = R * recoverpoint3d1 + t;
-//        points_3d.push_back(recoverpoint3d);
 
         // check the z value of the point
         if (recoverpoint3d1.z() >= 0 && recoverpoint3d2.z() >= 0) {
@@ -85,8 +83,21 @@ int calculatePointsInfrontOrigin(const Matrix33& K, Matrix33 R, Vector3D t,
         }
         points_3d.push_back(recoverpoint3d1);
         id++;
-    }
-    std::cout << "num of points behind: " << pointcounts << std::endl;
+
+        }
+    // evaluate result
+//    std::vector<Vector3D> check_imagept_1;
+//    for (auto &pt3d : points_3d) {
+//        Matrix homopoint3d (4, 1, 0.0);
+//        homopoint3d.set_column(0, {pt3d.x(), pt3d.y(), pt3d.z(), 1});
+//        Matrix imagept_1 = mult(M, homopoint3d);
+//        double ximg = imagept_1(0, 0) / imagept_1(2, 0);
+//        double yimg = imagept_1(1, 0) / imagept_1(2, 0);
+//        Vector2D xyimg = {ximg, yimg};
+//        std::cout << xyimg << std::endl;
+//    }
+
+    std::cout << "num of points in front: " << pointcounts << std::endl;
     return pointcounts;
 
 };
@@ -131,64 +142,6 @@ bool Triangulation::triangulation(
                  "\t    - do NOT include the 'build' directory (which contains the intermediate files in a build step).\n"
                  "\t    - make sure your code compiles and can reproduce your results without ANY modification.\n\n" << std::flush;
 
-    /// Below are a few examples showing some useful data structures and APIs.
-
-    /// define a 2D vector/point
-    Vector2D b(1.1, 2.2);
-
-    /// define a 3D vector/point
-    Vector3D a(1.1, 2.2, 3.3);
-
-    /// get the Cartesian coordinates of a (a is treated as Homogeneous coordinates)
-    Vector2D p = a.cartesian();
-
-    /// get the Homogeneous coordinates of p
-    Vector3D q = p.homogeneous();
-
-    /// define a 3 by 3 matrix (and all elements initialized to 0.0)
-//    Matrix33 A;
-
-    /// define and initialize a 3 by 3 matrix
-    Matrix33 T(1.1, 2.2, 3.3,
-               0, 2.2, 3.3,
-               0, 0, 1);
-
-//    /// define and initialize a 3 by 4 matrix
-//    Matrix34 M(1.1, 2.2, 3.3, 0,
-//               0, 2.2, 3.3, 1,
-//               0, 0, 1, 1);
-
-    /// set first row by a vector
-//    M.set_row(0, Vector4D(1.1, 2.2, 3.3, 4.4));
-
-    /// set second column by a vector
-//    M.set_column(1, Vector3D(5.5, 5.5, 5.5));
-
-    /// define a 15 by 9 matrix (and all elements initialized to 0.0)
-    Matrix W(15, 9, 0.0);
-    /// set the first row by a 9-dimensional vector
-    W.set_row(0, {0, 1, 2, 3, 4, 5, 6, 7, 8}); // {....} is equivalent to a std::vector<double>
-
-    /// get the number of rows.
-    int num_rows = W.rows();
-
-    /// get the number of columns.
-    int num_cols = W.cols();
-
-    /// get the the element at row 1 and column 2
-    double value = W(1, 2);
-
-    /// get the last column of a matrix
-    Vector last_column = W.get_column(W.cols() - 1);
-
-    /// define a 3 by 3 identity matrix
-    Matrix33 I = Matrix::identity(3, 3, 1.0);
-
-    /// matrix-vector product
-//    Vector3D v = M * Vector4D(1, 2, 3, 4); // M is 3 by 4
-
-    ///For more functions of Matrix and Vector, please refer to 'matrix.h' and 'vector.h'
-
     // TODO: delete all above example code in your final submission
 
     //--------------------------------------------------------------------------------------------------------------
@@ -196,6 +149,9 @@ bool Triangulation::triangulation(
 
     // TODO: check if the input is valid (always good because you never known how others will call your function).
     if (points_0.size() != points_1.size()) {
+        return false;
+    }
+    if (points_0.size() < 8 || points_1.size() < 8) {
         return false;
     }
 
@@ -273,19 +229,14 @@ bool Triangulation::triangulation(
     int nrrows = points_0.size();
     Matrix W_matrix(nrrows, 9, 0.0) ;
     for (int i = 0; i < points_0.size(); ++i) {
-//        W_matrix.set_row(i, {norm_points_0[i].x() * norm_points_1[i].x(), norm_points_0[i].y()*norm_points_1[i].y(), norm_points_1[i].x(), norm_points_0[i].x()*norm_points_1[i].y(), norm_points_0[i].y()*norm_points_1[i].y(), norm_points_1[i].y(), norm_points_0[i].x(), norm_points_0[i].y(), 1});
         W_matrix.set_row(i, {norm_points_0[i][0] * norm_points_1[i][0], norm_points_0[i][1]*norm_points_1[i][0], norm_points_1[i][0], norm_points_0[i][0]*norm_points_1[i][1], norm_points_0[i][1]*norm_points_1[i][1], norm_points_1[i][1], norm_points_0[i][0], norm_points_0[i][1], 1});
     }
-//    std::cout << " W matrix: \n" << W_matrix <<std::endl;
 
     //SVD DECOMPOSE W
     Matrix U_matrix(points_0.size(), points_0.size(), 0.0);   // initialized with 0s
     Matrix D_matrix(points_0.size(), 9, 0.0);   // initialized with 0s
     Matrix V_matrix(9, 9, 0.0);   // initialized with 0s
     svd_decompose(W_matrix, U_matrix, D_matrix, V_matrix);
-//    std::cout << " U " << U_matrix << std::endl;
-//    std::cout << " D " << D_matrix << std::endl;
-//    std::cout << " V " << V_matrix << std::endl; //is this transpose? YA?! noo?  W = U * D * V^T
 
     //last column of V is F hat vec
     Vector F_hat_vec = V_matrix.get_column(V_matrix.cols() - 1);
@@ -347,10 +298,6 @@ bool Triangulation::triangulation(
     double determ2 = determinant(E_U * E_W.transpose() * E_V.transpose());
     Matrix R1 = determ1 * E_U * E_W * E_V.transpose();
     Matrix R2 = determ2 * E_U * E_W.transpose() * E_V.transpose();
-//    double determ1 = determinant(mult(mult(E_U, E_W), E_V.transpose()));
-//    double determ2 = determinant(mult(mult(E_U, E_W.transpose()), E_V.transpose()));
-//    Matrix R1 = mult(mult(determ1 * E_U, E_W), E_V.transpose());
-//    Matrix R2 = mult(mult(determ2 * E_U, E_W.transpose()), E_V.transpose());
 
     // Calculate the number of points behind the origin for a given relative pose
 //    int calculatePointsBehindOrigin(const Matrix33& K, Matrix33 R, Vector3D t, const std::vector<Vector2D>& points_0, const std::vector<Vector2D>& points_1);
@@ -371,20 +318,16 @@ bool Triangulation::triangulation(
     t = tran[correct_pose];
     R = rot[correct_pose];
     std::cout << "correct pose: " << correct_pose << std::endl;
-//    t = t1;
-//    R = R1;
     std::cout << "R \n" << R << std::endl;
     std::cout << "t \n" << t << std::endl;
 
     // TODO: Reconstruct 3D points. The main task is
     //      - triangulate a pair of image points (i.e., compute the 3D coordinates for each corresponding point pair)
 
-    int pointsbehind = calculatePointsInfrontOrigin(K, R, t, points_0, points_1, points_3d);
+    int pointsinfront = calculatePointsInfrontOrigin(K, R, t, points_0, points_1, points_3d);
 
-    std::cout << "y coord try: \n" ;
-    std::cout << points_3d[140][1] << std::endl;
-    std::cout << points_3d[1][1] << std::endl;
-    std::cout << pointsbehind << std::endl;
+    std::cout << "number or points: " << pointsinfront << std::endl;
+
 
 
     // TODO: Don't forget to
@@ -397,6 +340,6 @@ bool Triangulation::triangulation(
     //          - function not implemented yet;
     //          - input not valid (e.g., not enough points, point numbers don't match);
     //          - encountered failure in any step.
-//    return points_3d.size() > 0;
+
     return true;
 }
